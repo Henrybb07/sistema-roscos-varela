@@ -7,6 +7,7 @@ Roscos Varela es una microempresa familiar dedicada a la elaboración y distribu
 #Integrantes
 Hernández Varela Jesús Enrique
 Gómez Tejeda Iván Gabriel
+Flores Pacheco Tania Jasmin
 
 #Roles Scrum
 Product Owner: Jesús Enrique Hernández Varela
