@@ -8,11 +8,12 @@ Roscos Varela es una microempresa familiar dedicada a la elaboración y distribu
 Hernández Varela Jesús Enrique
 Gómez Tejeda Iván Gabriel
 Flores Pacheco Tania Jasmin
+Parra Rodríguez Monserrat 
 
 #Roles Scrum
 Product Owner: Jesús Enrique Hernández Varela
 Scrum Master: Tania Jasmin Flores Pacheco
-Equipo de desarrollo: Monse Parra Rodríguez, Iván Gabriel Gómez Tejeda, Cear Jasut Cosme Alarcón
+Equipo de desarrollo: Monserrat Parra Rodríguez, Iván Gabriel Gómez Tejeda, Cear Jasut Cosme Alarcón
 
 #Tecnologías
 Tipo: Aplicación de escritorio (Windows 10 de 64 bits)
