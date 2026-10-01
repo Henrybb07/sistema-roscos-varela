@@ -5,11 +5,8 @@ Aplicación de escritorio para la gestión de inventario, pedidos, producción y
 Roscos Varela es una microempresa familiar dedicada a la elaboración y distribución de galletas conocidas como "roscos" a cafeterías. Actualmente manejan 3 sabores café, cocoa y vainilla y atiende a seis cafeterías en Coatepec.
 
 #Integrantes
-Cosme Alarcón Cear Jasut
-Flores Pacheco Tania Jasmin
-Gómez Tejeda Iván Gabriel
 Hernández Varela Jesús Enrique
-Parra Rodríguez Monserrat
+
 
 #Roles Scrum
 Product Owner: Jesús Enrique Hernández Varela
