@@ -9,6 +9,7 @@ Hernández Varela Jesús Enrique
 Gómez Tejeda Iván Gabriel
 Flores Pacheco Tania Jasmin
 Parra Rodríguez Monserrat 
+Cosme Alarcon Cear Jasut 
 
 #Roles Scrum
 Product Owner: Jesús Enrique Hernández Varela
