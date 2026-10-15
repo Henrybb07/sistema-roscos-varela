@@ -3,10 +3,6 @@ package poo.roscos;
 import java.time.LocalDate;
 
 public class Pedido {
-
-	public static final double PRECIO_PAQUETE = 25.0;
-	public static final int DIAS_ENTREGA = 4;
-
 	private int idPedido;
 	private int idCliente;
 	private int cantidadVainilla;
@@ -16,75 +12,78 @@ public class Pedido {
 	private LocalDate fechaPedido;
 	private LocalDate fechaEntrega;
 	private double total;
+	private String estado;
 
-	public Pedido() { }
+	public static final double PRECIO_PAQUETE = 25.00;
+	public static final int DIAS_ENTREGA = 4;
 
-	// ---------- ID ----------
+	public Pedido() {
+		this.estado = "Pendiente"; // Estado predeterminado.
+	}
+
+	public Pedido(int idCliente, int cantidadVainilla, int cantidadCocoa, int cantidadCafe, String direccionEntrega, LocalDate fechaPedido, LocalDate fechaEntrega) {
+		this.idCliente = idCliente;
+		this.cantidadVainilla = cantidadVainilla;
+		this.cantidadCocoa = cantidadCocoa;
+		this.cantidadCafe = cantidadCafe;
+		this.direccionEntrega = direccionEntrega;
+		this.fechaPedido = fechaPedido;
+		this.fechaEntrega = fechaEntrega;
+		this.total = (cantidadVainilla + cantidadCocoa + cantidadCafe) * PRECIO_PAQUETE;
+		this.estado = "Pendiente";
+	}
+
+	// Getters y Setters
 	public int getIdPedido() { return idPedido; }
 	public void setIdPedido(int idPedido) { this.idPedido = idPedido; }
 
-	// ---------- CLIENTE ----------
 	public int getIdCliente() { return idCliente; }
 	public void setIdCliente(int idCliente) { this.idCliente = idCliente; }
 
-	// ---------- CANTIDADES (calculan total) ----------
 	public int getCantidadVainilla() { return cantidadVainilla; }
-	public void setCantidadVainilla(int c) {
-    	this.cantidadVainilla = c;
-        recalcularTotal();
+	public void setCantidadVainilla(int cantidadVainilla) { 
+		this.cantidadVainilla = cantidadVainilla;
+		recalcularTotal();
 	}
 
 	public int getCantidadCocoa() { return cantidadCocoa; }
-	public void setCantidadCocoa(int c) {
-    	this.cantidadCocoa = c;
-        recalcularTotal();
+	public void setCantidadCocoa(int cantidadCocoa) { 
+		this.cantidadCocoa = cantidadCocoa;
+		recalcularTotal();
 	}
 
 	public int getCantidadCafe() { return cantidadCafe; }
-	public void setCantidadCafe(int c) {
-    	this.cantidadCafe = c;
-        recalcularTotal();
+	public void setCantidadCafe(int cantidadCafe) { 
+		this.cantidadCafe = cantidadCafe;
+		recalcularTotal();
 	}
 
-	// ---------- DIRECCIÓN ----------
 	public String getDireccionEntrega() { return direccionEntrega; }
-	public void setDireccionEntrega(String d) { this.direccionEntrega = d; }
+	public void setDireccionEntrega(String direccionEntrega) { this.direccionEntrega = direccionEntrega; }
 
-	// ---------- FECHAS (fecha entrega se debe calcular sola) ----------
 	public LocalDate getFechaPedido() { return fechaPedido; }
-	public void setFechaPedido(LocalDate f) {
-		this.fechaPedido = f;
-		recalcularFechaEntrega();
+	public void setFechaPedido(LocalDate fechaPedido) { 
+		this.fechaPedido = fechaPedido;
+		if (fechaPedido != null) {
+			this.fechaEntrega = fechaPedido.plusDays(DIAS_ENTREGA);
+		}
 	}
 
 	public LocalDate getFechaEntrega() { return fechaEntrega; }
-	public void setFechaEntrega(LocalDate f) { this.fechaEntrega = f; }
+	public void setFechaEntrega(LocalDate fechaEntrega) { this.fechaEntrega = fechaEntrega; }
 
-    // ---------- TOTAL ----------
 	public double getTotal() { return total; }
-	public void setTotal(double t) { this.total = t; }
+	public void setTotal(double total) { this.total = total; }
 
-    // REGLAS DE NEGOCIO
-    
-	/** Regla: cada paquete cuesta $25. Total = suma * 25 */
-	public void recalcularTotal() {
-    	this.total = (cantidadVainilla + cantidadCocoa + cantidadCafe) * PRECIO_PAQUETE;
-	}
+	public String getEstado() { return estado; }
+	public void setEstado(String estado) { this.estado = estado; }
 
-    /** Regla: la entrega es 4 días después del pedido */
-	public void recalcularFechaEntrega() {
-    	if (fechaPedido != null) {
-        	this.fechaEntrega = fechaPedido.plusDays(DIAS_ENTREGA);
-        }
-	}
-
-	/** Método auxiliar que devuelve solo el total calculado sin modificar el campo */
-	public double calcularTotal() {
-    	return (cantidadVainilla + cantidadCocoa + cantidadCafe) * PRECIO_PAQUETE;
+	private void recalcularTotal() {
+		this.total = (this.cantidadVainilla + this.cantidadCocoa + this.cantidadCafe) * PRECIO_PAQUETE;
 	}
 
 	@Override
 	public String toString() {
-    	return "Pedido #" + idPedido + " | Cliente " + idCliente + " | V:" + cantidadVainilla + " C:" + cantidadCocoa + " F:" + cantidadCafe + " | Pedido: " + fechaPedido + " → Entrega: " + fechaEntrega + " | Total: $" + total;
+		return "Pedido [ID=" + idPedido + ", Cliente=" + idCliente + ", Total=" + total + ", Estado=" + estado + "]";
 	}
 }
