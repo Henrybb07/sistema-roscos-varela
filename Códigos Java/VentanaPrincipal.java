@@ -34,6 +34,7 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 
 public class VentanaPrincipal extends JFrame {
@@ -47,7 +48,10 @@ public class VentanaPrincipal extends JFrame {
 	private static final Color COLOR_VERDE  = new Color(0x4F, 0x79, 0x42);
 	private static final Color COLOR_ROJO   = new Color(0xA9, 0x32, 0x26);
 	private static final Color COLOR_BLANCO = new Color(0xFF, 0xFD, 0xF7);
-    
+
+	private static final Color COLOR_ESTADO_SIN = new Color(0xF8, 0xD7, 0xD5);
+	private static final Color COLOR_ESTADO_BAJO = new Color(0xFB, 0xEE, 0xC4);
+
 	private static final Font F_TITULO = new Font("Serif",     Font.BOLD,  26);
 	private static final Font F_SUBTIT = new Font("Serif",     Font.ITALIC,14);
 	private static final Font F_ETIQ   = new Font("SansSerif", Font.BOLD,  13);
@@ -74,12 +78,27 @@ public class VentanaPrincipal extends JFrame {
 	private JTable tablaClientes;
 	private DefaultTableModel modeloTablaClientes;
 
-	// Componentes Pestaña PRODUCCIÓN (NUEVO)
+	// Componentes Pestaña PRODUCCIÓN
 	private JTable tablaProduccion;
 	private DefaultTableModel modeloTablaProduccion;
 
+	// Componentes Pestaña INSUMOS - Producción
+	private JTable tablaInsProd;
+	private DefaultTableModel modeloInsProd;
+	private JTextField txtIdInsProd, txtNomInsProd, txtCantInsProd, txtMinInsProd;
+	private JComboBox<String> cmbUnidadInsProd;
+
+	// Componentes Pestaña INSUMOS - Empaquetado
+	private JTable tablaInsEmp;
+	private DefaultTableModel modeloInsEmp;
+	private JTextField txtIdInsEmp, txtNomInsEmp, txtCantInsEmp, txtMinInsEmp;
+	private JComboBox<String> cmbUnidadInsEmp;
+
 	private final PedidoDAO daoPedido = new PedidoDAO();
 	private final ClienteDAO daoCliente = new ClienteDAO();
+	private final InsumoProduccionDAO daoInsProd = new InsumoProduccionDAO();
+	private final InsumoEmpaquetadoDAO daoInsEmp = new InsumoEmpaquetadoDAO();
+
 	private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
 	public static void main(String[] args) {
@@ -106,7 +125,6 @@ public class VentanaPrincipal extends JFrame {
 
 		contentPane.add(crearEncabezado(), BorderLayout.NORTH);
 
-		// Menú General por Pestañas
 		tabbedPane = new JTabbedPane();
 		tabbedPane.setFont(F_ETIQ);
 		tabbedPane.setBackground(COLOR_CREMA);
@@ -115,6 +133,7 @@ public class VentanaPrincipal extends JFrame {
 		tabbedPane.addTab("Gestión de Pedidos", crearPanelPedidos());
 		tabbedPane.addTab("Gestión de Clientes", crearPanelClientes());
 		tabbedPane.addTab("Gestión de Producción", crearPanelProduccion());
+		tabbedPane.addTab("Gestión de Insumos", crearPanelInsumos());
 
 		contentPane.add(tabbedPane, BorderLayout.CENTER);
 
@@ -122,6 +141,8 @@ public class VentanaPrincipal extends JFrame {
 		cargarTablaPedidos();
 		cargarTablaClientes();
 		cargarTablaProduccion();
+		cargarTablaInsProd();
+		cargarTablaInsEmp();
 		configurarEventos();
 	}
 
@@ -135,7 +156,7 @@ public class VentanaPrincipal extends JFrame {
 		titulo.setForeground(COLOR_MARRON);
 		titulo.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-		JLabel subtitulo = new JLabel("Control de Ventas, Clientes y Producción");
+		JLabel subtitulo = new JLabel("Control de Ventas, Clientes, Producción e Insumos");
 		subtitulo.setFont(F_SUBTIT);
 		subtitulo.setForeground(COLOR_DORADO);
 		subtitulo.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -151,7 +172,9 @@ public class VentanaPrincipal extends JFrame {
 		return panel;
 	}
 
+	// ============================================================
 	// PESTAÑA 1: PEDIDOS
+	// ============================================================
 	private JPanel crearPanelPedidos() {
 		JPanel panel = new JPanel(new BorderLayout(10, 10));
 		panel.setBackground(COLOR_FONDO);
@@ -179,7 +202,6 @@ public class VentanaPrincipal extends JFrame {
 		g.gridx = 2; panel.add(etiqueta("Cliente:"), g);
 		g.gridx = 3; panel.add(cmbCliente, g);
 
-		// Cantidades
 		txtVainilla = crearCampo(5); txtVainilla.setText("0");
 		txtCocoa    = crearCampo(5); txtCocoa.setText("0");
 		txtCafe     = crearCampo(5); txtCafe.setText("0");
@@ -194,7 +216,6 @@ public class VentanaPrincipal extends JFrame {
 		g.gridx = 1; g.gridwidth = 3; panel.add(panelCant, g);
 		g.gridwidth = 1;
 
-		// Dirección
 		txtDireccionPedido = crearCampo(45);
 		txtDireccionPedido.setEditable(false);
 		txtDireccionPedido.setBackground(COLOR_CREMA);
@@ -203,7 +224,6 @@ public class VentanaPrincipal extends JFrame {
 		g.gridx = 1; g.gridwidth = 3; panel.add(txtDireccionPedido, g);
 		g.gridwidth = 1;
 
-		// Fechas y Estado
 		txtFechaPedido  = crearCampo(12);
 		txtFechaEntrega = crearCampo(12);
 		txtFechaEntrega.setEditable(false);
@@ -223,7 +243,6 @@ public class VentanaPrincipal extends JFrame {
 		g.gridx = 1; g.gridwidth = 3; panel.add(panelFechas, g);
 		g.gridwidth = 1;
 
-		// Total
 		txtTotal = crearCampo(10);
 		txtTotal.setEditable(false);
 		txtTotal.setFont(new Font("SansSerif", Font.BOLD, 15));
@@ -237,7 +256,6 @@ public class VentanaPrincipal extends JFrame {
 		g.gridx = 2; g.gridwidth = 2; panel.add(lblP, g);
 		g.gridwidth = 1;
 
-		// Botones
 		JPanel pBotones = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 8));
 		pBotones.setBackground(COLOR_FONDO);
 		pBotones.add(boton("Buscar",   COLOR_DORADO, Color.WHITE, e -> accionPedido("buscar")));
@@ -280,8 +298,9 @@ public class VentanaPrincipal extends JFrame {
 		return scroll;
 	}
 
-
+	// ============================================================
 	// PESTAÑA 2: CLIENTES
+	// ============================================================
 	private JPanel crearPanelClientes() {
 		JPanel panel = new JPanel(new BorderLayout(10, 10));
 		panel.setBackground(COLOR_FONDO);
@@ -351,18 +370,17 @@ public class VentanaPrincipal extends JFrame {
 		return scroll;
 	}
 
-
-
+	// ============================================================
 	// PESTAÑA 3: PRODUCCIÓN
+	// ============================================================
 	private JPanel crearPanelProduccion() {
 		JPanel panel = new JPanel(new BorderLayout(10, 10));
 		panel.setBackground(COLOR_FONDO);
 		panel.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-		// Panel superior con instrucciones y botón de acción rápida
 		JPanel panelSuperior = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 10));
 		panelSuperior.setBackground(COLOR_FONDO);
-		
+
 		JLabel lblInfo = new JLabel("Pedidos pendientes de elaboración y surtido en planta:");
 		lblInfo.setFont(F_ETIQ);
 		lblInfo.setForeground(COLOR_MARRON);
@@ -406,8 +424,217 @@ public class VentanaPrincipal extends JFrame {
 		return scroll;
 	}
 
+	// ============================================================
+	// PESTAÑA 4: INSUMOS (Producción / Empaquetado)
+	// ============================================================
+	private JPanel crearPanelInsumos() {
+		JPanel panel = new JPanel(new BorderLayout(10, 10));
+		panel.setBackground(COLOR_FONDO);
+		panel.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-	// LOGICA PARA CARGA DE DATOS
+		JTabbedPane subTabs = new JTabbedPane();
+		subTabs.setFont(F_ETIQ);
+		subTabs.setBackground(COLOR_CREMA);
+		subTabs.setForeground(COLOR_MARRON);
+		subTabs.addTab("Insumos de Producción", crearSubPanelInsProd());
+		subTabs.addTab("Insumos de Empaquetado", crearSubPanelInsEmp());
+
+		panel.add(subTabs, BorderLayout.CENTER);
+		return panel;
+	}
+
+	// ----- Sub-pestaña PRODUCCIÓN -----
+	private JPanel crearSubPanelInsProd() {
+		JPanel panel = new JPanel(new BorderLayout(10, 10));
+		panel.setBackground(COLOR_FONDO);
+		panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+		panel.add(crearFormularioInsProd(), BorderLayout.CENTER);
+		panel.add(crearTablaInsProdUI(), BorderLayout.SOUTH);
+		return panel;
+	}
+
+	private JPanel crearFormularioInsProd() {
+		JPanel panel = new JPanel(new GridBagLayout());
+		panel.setBackground(COLOR_FONDO);
+		GridBagConstraints g = new GridBagConstraints();
+		g.insets = new Insets(6, 8, 6, 8);
+		g.anchor = GridBagConstraints.WEST;
+
+		txtIdInsProd   = crearCampo(6);
+		txtNomInsProd  = crearCampo(30);
+		txtCantInsProd = crearCampo(10);
+		txtMinInsProd  = crearCampo(10);
+		cmbUnidadInsProd = new JComboBox<>(new String[]{"kg", "g", "ml", "unidad"});
+		cmbUnidadInsProd.setFont(F_CAMPO);
+		cmbUnidadInsProd.setBackground(COLOR_BLANCO);
+
+		g.gridx = 0; g.gridy = 0; panel.add(etiqueta("ID:"), g);
+		g.gridx = 1; panel.add(txtIdInsProd, g);
+		g.gridx = 2; panel.add(etiqueta("Nombre:"), g);
+		g.gridx = 3; panel.add(txtNomInsProd, g);
+
+		g.gridx = 0; g.gridy = 1; panel.add(etiqueta("Cantidad:"), g);
+		g.gridx = 1; panel.add(txtCantInsProd, g);
+		g.gridx = 2; panel.add(etiqueta("Unidad:"), g);
+		g.gridx = 3; panel.add(cmbUnidadInsProd, g);
+
+		g.gridx = 0; g.gridy = 2; panel.add(etiqueta("Stock mínimo:"), g);
+		g.gridx = 1; panel.add(txtMinInsProd, g);
+
+		JPanel pBotones = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+		pBotones.setBackground(COLOR_FONDO);
+		pBotones.add(boton("Buscar",   COLOR_DORADO, Color.WHITE, e -> accionInsProd("buscar")));
+		pBotones.add(boton("Nuevo",    COLOR_MARRON, Color.WHITE, e -> accionInsProd("nuevo")));
+		pBotones.add(boton("Guardar",  COLOR_VERDE,  Color.WHITE, e -> accionInsProd("guardar")));
+		pBotones.add(boton("Eliminar", COLOR_ROJO,   Color.WHITE, e -> accionInsProd("eliminar")));
+		pBotones.add(boton("Limpiar",  COLOR_CREMA,  COLOR_MARRON, e -> accionInsProd("limpiar")));
+		pBotones.add(boton("Actualizar lista", COLOR_MARRON, Color.WHITE, e -> cargarTablaInsProd()));
+
+		g.gridx = 0; g.gridy = 3; g.gridwidth = 4;
+		g.fill = GridBagConstraints.HORIZONTAL;
+		panel.add(pBotones, g);
+
+		return panel;
+	}
+
+	private JScrollPane crearTablaInsProdUI() {
+		String[] cols = {"ID", "Nombre", "Cantidad", "Unidad", "Stock mínimo", "Estado"};
+		modeloInsProd = new DefaultTableModel(cols, 0) {
+			private static final long serialVersionUID = 1L;
+			@Override public boolean isCellEditable(int r, int c) { return false; }
+		};
+		tablaInsProd = new JTable(modeloInsProd);
+		configurarEstiloTabla(tablaInsProd);
+
+		tablaInsProd.getColumnModel().getColumn(0).setPreferredWidth(50);
+		tablaInsProd.getColumnModel().getColumn(1).setPreferredWidth(300);
+		tablaInsProd.getColumnModel().getColumn(2).setPreferredWidth(100);
+		tablaInsProd.getColumnModel().getColumn(3).setPreferredWidth(80);
+		tablaInsProd.getColumnModel().getColumn(4).setPreferredWidth(110);
+		tablaInsProd.getColumnModel().getColumn(5).setPreferredWidth(100);
+		tablaInsProd.getColumnModel().getColumn(5).setCellRenderer(crearRendererEstado());
+
+		tablaInsProd.getSelectionModel().addListSelectionListener(e -> {
+			if (!e.getValueIsAdjusting() && tablaInsProd.getSelectedRow() >= 0) {
+				int id = (int) modeloInsProd.getValueAt(tablaInsProd.getSelectedRow(), 0);
+				cargarInsProdPorId(id);
+			}
+		});
+
+		JScrollPane scroll = new JScrollPane(tablaInsProd);
+		scroll.setBorder(new LineBorder(COLOR_DORADO, 1, true));
+		scroll.setPreferredSize(new Dimension(1040, 260));
+		return scroll;
+	}
+
+	// ----- Sub-pestaña EMPAQUETADO -----
+	private JPanel crearSubPanelInsEmp() {
+		JPanel panel = new JPanel(new BorderLayout(10, 10));
+		panel.setBackground(COLOR_FONDO);
+		panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+		panel.add(crearFormularioInsEmp(), BorderLayout.CENTER);
+		panel.add(crearTablaInsEmpUI(), BorderLayout.SOUTH);
+		return panel;
+	}
+
+	private JPanel crearFormularioInsEmp() {
+		JPanel panel = new JPanel(new GridBagLayout());
+		panel.setBackground(COLOR_FONDO);
+		GridBagConstraints g = new GridBagConstraints();
+		g.insets = new Insets(6, 8, 6, 8);
+		g.anchor = GridBagConstraints.WEST;
+
+		txtIdInsEmp   = crearCampo(6);
+		txtNomInsEmp  = crearCampo(30);
+		txtCantInsEmp = crearCampo(10);
+		txtMinInsEmp  = crearCampo(10);
+		cmbUnidadInsEmp = new JComboBox<>(new String[]{"unidad", "paquete", "rollo"});
+		cmbUnidadInsEmp.setFont(F_CAMPO);
+		cmbUnidadInsEmp.setBackground(COLOR_BLANCO);
+
+		g.gridx = 0; g.gridy = 0; panel.add(etiqueta("ID:"), g);
+		g.gridx = 1; panel.add(txtIdInsEmp, g);
+		g.gridx = 2; panel.add(etiqueta("Nombre:"), g);
+		g.gridx = 3; panel.add(txtNomInsEmp, g);
+
+		g.gridx = 0; g.gridy = 1; panel.add(etiqueta("Cantidad:"), g);
+		g.gridx = 1; panel.add(txtCantInsEmp, g);
+		g.gridx = 2; panel.add(etiqueta("Unidad:"), g);
+		g.gridx = 3; panel.add(cmbUnidadInsEmp, g);
+
+		g.gridx = 0; g.gridy = 2; panel.add(etiqueta("Stock mínimo:"), g);
+		g.gridx = 1; panel.add(txtMinInsEmp, g);
+
+		JPanel pBotones = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+		pBotones.setBackground(COLOR_FONDO);
+		pBotones.add(boton("Buscar",   COLOR_DORADO, Color.WHITE, e -> accionInsEmp("buscar")));
+		pBotones.add(boton("Nuevo",    COLOR_MARRON, Color.WHITE, e -> accionInsEmp("nuevo")));
+		pBotones.add(boton("Guardar",  COLOR_VERDE,  Color.WHITE, e -> accionInsEmp("guardar")));
+		pBotones.add(boton("Eliminar", COLOR_ROJO,   Color.WHITE, e -> accionInsEmp("eliminar")));
+		pBotones.add(boton("Limpiar",  COLOR_CREMA,  COLOR_MARRON, e -> accionInsEmp("limpiar")));
+		pBotones.add(boton("Actualizar lista", COLOR_MARRON, Color.WHITE, e -> cargarTablaInsEmp()));
+
+		g.gridx = 0; g.gridy = 3; g.gridwidth = 4;
+		g.fill = GridBagConstraints.HORIZONTAL;
+		panel.add(pBotones, g);
+
+		return panel;
+	}
+
+	private JScrollPane crearTablaInsEmpUI() {
+		String[] cols = {"ID", "Nombre", "Cantidad", "Unidad", "Stock mínimo", "Estado"};
+		modeloInsEmp = new DefaultTableModel(cols, 0) {
+			private static final long serialVersionUID = 1L;
+			@Override public boolean isCellEditable(int r, int c) { return false; }
+		};
+		tablaInsEmp = new JTable(modeloInsEmp);
+		configurarEstiloTabla(tablaInsEmp);
+
+		tablaInsEmp.getColumnModel().getColumn(0).setPreferredWidth(50);
+		tablaInsEmp.getColumnModel().getColumn(1).setPreferredWidth(300);
+		tablaInsEmp.getColumnModel().getColumn(2).setPreferredWidth(100);
+		tablaInsEmp.getColumnModel().getColumn(3).setPreferredWidth(80);
+		tablaInsEmp.getColumnModel().getColumn(4).setPreferredWidth(110);
+		tablaInsEmp.getColumnModel().getColumn(5).setPreferredWidth(100);
+		tablaInsEmp.getColumnModel().getColumn(5).setCellRenderer(crearRendererEstado());
+
+		tablaInsEmp.getSelectionModel().addListSelectionListener(e -> {
+			if (!e.getValueIsAdjusting() && tablaInsEmp.getSelectedRow() >= 0) {
+				int id = (int) modeloInsEmp.getValueAt(tablaInsEmp.getSelectedRow(), 0);
+				cargarInsEmpPorId(id);
+			}
+		});
+
+		JScrollPane scroll = new JScrollPane(tablaInsEmp);
+		scroll.setBorder(new LineBorder(COLOR_DORADO, 1, true));
+		scroll.setPreferredSize(new Dimension(1040, 260));
+		return scroll;
+	}
+
+	private DefaultTableCellRenderer crearRendererEstado() {
+		return new DefaultTableCellRenderer() {
+			private static final long serialVersionUID = 1L;
+			@Override
+			public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean foc, int r, int c) {
+				Component comp = super.getTableCellRendererComponent(t, v, sel, foc, r, c);
+				if (!sel) {
+					String est = String.valueOf(v);
+					if ("Sin stock".equals(est))      comp.setBackground(COLOR_ESTADO_SIN);
+					else if ("Bajo".equals(est))     comp.setBackground(COLOR_ESTADO_BAJO);
+					else                             comp.setBackground(COLOR_BLANCO);
+					comp.setForeground(COLOR_MARRON);
+				} else {
+					comp.setBackground(COLOR_DORADO);
+					comp.setForeground(Color.WHITE);
+				}
+				return comp;
+			}
+		};
+	}
+
+	// ============================================================
+	// CARGA DE DATOS
+	// ============================================================
 	private void cargarClientesCombo() {
 		DefaultComboBoxModel<ClienteItem> modelo = new DefaultComboBoxModel<>();
 		List<Cliente> lista = daoCliente.listar();
@@ -425,8 +652,8 @@ public class VentanaPrincipal extends JFrame {
 		List<Pedido> lista = daoPedido.listar();
 		for (Pedido p : lista) {
 			modeloTablaPedidos.addRow(new Object[]{
-					p.getIdPedido(), nombreCliente(p.getIdCliente()), p.getCantidadVainilla(), 
-					p.getCantidadCocoa(), p.getCantidadCafe(), p.getDireccionEntrega(), 
+					p.getIdPedido(), nombreCliente(p.getIdCliente()), p.getCantidadVainilla(),
+					p.getCantidadCocoa(), p.getCantidadCafe(), p.getDireccionEntrega(),
 					p.getFechaPedido(), p.getFechaEntrega(), String.format("$%.2f", p.getTotal()), p.getEstado()
 			});
 		}
@@ -447,8 +674,30 @@ public class VentanaPrincipal extends JFrame {
 		List<Pedido> lista = daoPedido.listar();
 		for (Pedido p : lista) {
 			modeloTablaProduccion.addRow(new Object[]{
-					p.getIdPedido(), nombreCliente(p.getIdCliente()), p.getCantidadVainilla(), 
+					p.getIdPedido(), nombreCliente(p.getIdCliente()), p.getCantidadVainilla(),
 					p.getCantidadCocoa(), p.getCantidadCafe(), p.getFechaEntrega(), p.getEstado()
+			});
+		}
+	}
+
+	private void cargarTablaInsProd() {
+		if (modeloInsProd == null) return;
+		modeloInsProd.setRowCount(0);
+		for (InsumoProduccion i : daoInsProd.listar()) {
+			modeloInsProd.addRow(new Object[]{
+					i.getIdInsumo(), i.getNombreInsumo(), i.getCantidad(), i.getUnidad(),
+					i.getStockMinimo(), i.getEstado()
+			});
+		}
+	}
+
+	private void cargarTablaInsEmp() {
+		if (modeloInsEmp == null) return;
+		modeloInsEmp.setRowCount(0);
+		for (InsumoEmpaquetado i : daoInsEmp.listar()) {
+			modeloInsEmp.addRow(new Object[]{
+					i.getIdInsumoEmpaque(), i.getNombreInsumo(), i.getCantidad(), i.getUnidad(),
+					i.getStockMinimo(), i.getEstado()
 			});
 		}
 	}
@@ -483,7 +732,7 @@ public class VentanaPrincipal extends JFrame {
 				cargarPedidoPorId(id);
 			}
 		});
-		
+
 		tablaClientes.getSelectionModel().addListSelectionListener(e -> {
 			if (!e.getValueIsAdjusting() && tablaClientes.getSelectedRow() >= 0) {
 				int id = (int) modeloTablaClientes.getValueAt(tablaClientes.getSelectedRow(), 0);
@@ -514,8 +763,14 @@ public class VentanaPrincipal extends JFrame {
 		return Integer.parseInt(s.trim());
 	}
 
+	private double parsearDouble(String s) {
+		if (s == null || s.trim().isEmpty()) return 0;
+		return Double.parseDouble(s.trim().replace(",", "."));
+	}
 
+	// ============================================================
 	// ACCIONES DE PEDIDOS
+	// ============================================================
 	private void accionPedido(String cmd) {
 		switch (cmd) {
 			case "buscar":   buscarPedido();   break;
@@ -613,8 +868,9 @@ public class VentanaPrincipal extends JFrame {
 		tablaPedidos.clearSelection();
 	}
 
-
+	// ============================================================
 	// ACCIONES DE CLIENTES
+	// ============================================================
 	private void accionCliente(String cmd) {
 		switch (cmd) {
 			case "buscar":   buscarCliente();   break;
@@ -697,8 +953,9 @@ public class VentanaPrincipal extends JFrame {
 		tablaClientes.clearSelection();
 	}
 
-
+	// ============================================================
 	// ACCIONES DE PRODUCCIÓN
+	// ============================================================
 	private void marcarPedidoRealizado() {
 		int fila = tablaProduccion.getSelectedRow();
 		if (fila < 0) {
@@ -731,8 +988,193 @@ public class VentanaPrincipal extends JFrame {
 		}
 	}
 
+	// ============================================================
+	// ACCIONES DE INSUMOS - PRODUCCIÓN
+	// ============================================================
+	private void accionInsProd(String cmd) {
+		switch (cmd) {
+			case "buscar":   buscarInsProd();   break;
+			case "nuevo":    limpiarInsProd();  break;
+			case "guardar":  guardarInsProd();  break;
+			case "eliminar": eliminarInsProd(); break;
+			case "limpiar":  limpiarInsProd();  break;
+		}
+	}
 
+	private void buscarInsProd() {
+		try {
+			int id = Integer.parseInt(txtIdInsProd.getText().trim());
+			cargarInsProdPorId(id);
+		} catch (NumberFormatException e) {
+			JOptionPane.showMessageDialog(this, "Escribe un ID válido.", "Aviso", JOptionPane.WARNING_MESSAGE);
+		}
+	}
+
+	private void cargarInsProdPorId(int id) {
+		InsumoProduccion i = daoInsProd.buscarPorId(id);
+		if (i == null) {
+			JOptionPane.showMessageDialog(this, "No existe el insumo #" + id, "No encontrado", JOptionPane.INFORMATION_MESSAGE);
+			return;
+		}
+		txtIdInsProd.setText(String.valueOf(i.getIdInsumo()));
+		txtNomInsProd.setText(i.getNombreInsumo());
+		txtCantInsProd.setText(String.valueOf(i.getCantidad()));
+		cmbUnidadInsProd.setSelectedItem(i.getUnidad());
+		txtMinInsProd.setText(String.valueOf(i.getStockMinimo()));
+	}
+
+	private void guardarInsProd() {
+		try {
+			InsumoProduccion i = new InsumoProduccion();
+			try { i.setIdInsumo(Integer.parseInt(txtIdInsProd.getText().trim())); } catch (Exception e) { i.setIdInsumo(0); }
+			i.setNombreInsumo(txtNomInsProd.getText().trim());
+			i.setCantidad(parsearDouble(txtCantInsProd.getText()));
+			i.setUnidad(cmbUnidadInsProd.getSelectedItem().toString());
+			i.setStockMinimo(parsearDouble(txtMinInsProd.getText()));
+
+			if (i.getNombreInsumo().isEmpty()) {
+				JOptionPane.showMessageDialog(this, "El nombre es obligatorio.", "Aviso", JOptionPane.WARNING_MESSAGE);
+				return;
+			}
+			if (i.getCantidad() < 0 || i.getStockMinimo() < 0) {
+				JOptionPane.showMessageDialog(this, "Las cantidades no pueden ser negativas.", "Aviso", JOptionPane.WARNING_MESSAGE);
+				return;
+			}
+
+			boolean ok = (i.getIdInsumo() == 0) ? daoInsProd.insertar(i) : daoInsProd.actualizar(i);
+			if (ok) {
+				JOptionPane.showMessageDialog(this, "Insumo guardado con éxito.");
+				cargarTablaInsProd();
+				if (i.getIdInsumo() == 0) txtIdInsProd.setText(String.valueOf(i.getIdInsumo()));
+			} else {
+				JOptionPane.showMessageDialog(this, "No se pudo guardar el insumo.", "Error", JOptionPane.ERROR_MESSAGE);
+			}
+		} catch (Exception e) {
+			JOptionPane.showMessageDialog(this, "Error: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+		}
+	}
+
+	private void eliminarInsProd() {
+		try {
+			int id = Integer.parseInt(txtIdInsProd.getText().trim());
+			if (JOptionPane.showConfirmDialog(this, "¿Eliminar insumo #" + id + "?", "Confirmar", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+				if (daoInsProd.eliminar(id)) {
+					JOptionPane.showMessageDialog(this, "Insumo eliminado.");
+					limpiarInsProd();
+					cargarTablaInsProd();
+				} else {
+					JOptionPane.showMessageDialog(this, "No se pudo eliminar (puede estar en uso en recetas o lotes).");
+				}
+			}
+		} catch (Exception e) {
+			JOptionPane.showMessageDialog(this, "ID inválido.");
+		}
+	}
+
+	private void limpiarInsProd() {
+		txtIdInsProd.setText("");
+		txtNomInsProd.setText("");
+		txtCantInsProd.setText("0");
+		cmbUnidadInsProd.setSelectedIndex(0);
+		txtMinInsProd.setText("0");
+		tablaInsProd.clearSelection();
+	}
+
+	// ============================================================
+	// ACCIONES DE INSUMOS - EMPAQUETADO
+	// ============================================================
+	private void accionInsEmp(String cmd) {
+		switch (cmd) {
+			case "buscar":   buscarInsEmp();   break;
+			case "nuevo":    limpiarInsEmp();  break;
+			case "guardar":  guardarInsEmp();  break;
+			case "eliminar": eliminarInsEmp(); break;
+			case "limpiar":  limpiarInsEmp();  break;
+		}
+	}
+
+	private void buscarInsEmp() {
+		try {
+			int id = Integer.parseInt(txtIdInsEmp.getText().trim());
+			cargarInsEmpPorId(id);
+		} catch (NumberFormatException e) {
+			JOptionPane.showMessageDialog(this, "Escribe un ID válido.", "Aviso", JOptionPane.WARNING_MESSAGE);
+		}
+	}
+
+	private void cargarInsEmpPorId(int id) {
+		InsumoEmpaquetado i = daoInsEmp.buscarPorId(id);
+		if (i == null) {
+			JOptionPane.showMessageDialog(this, "No existe el insumo #" + id, "No encontrado", JOptionPane.INFORMATION_MESSAGE);
+			return;
+		}
+		txtIdInsEmp.setText(String.valueOf(i.getIdInsumoEmpaque()));
+		txtNomInsEmp.setText(i.getNombreInsumo());
+		txtCantInsEmp.setText(String.valueOf(i.getCantidad()));
+		cmbUnidadInsEmp.setSelectedItem(i.getUnidad());
+		txtMinInsEmp.setText(String.valueOf(i.getStockMinimo()));
+	}
+
+	private void guardarInsEmp() {
+		try {
+			InsumoEmpaquetado i = new InsumoEmpaquetado();
+			try { i.setIdInsumoEmpaque(Integer.parseInt(txtIdInsEmp.getText().trim())); } catch (Exception e) { i.setIdInsumoEmpaque(0); }
+			i.setNombreInsumo(txtNomInsEmp.getText().trim());
+			i.setCantidad(parsearInt(txtCantInsEmp.getText()));
+			i.setUnidad(cmbUnidadInsEmp.getSelectedItem().toString());
+			i.setStockMinimo(parsearInt(txtMinInsEmp.getText()));
+
+			if (i.getNombreInsumo().isEmpty()) {
+				JOptionPane.showMessageDialog(this, "El nombre es obligatorio.", "Aviso", JOptionPane.WARNING_MESSAGE);
+				return;
+			}
+			if (i.getCantidad() < 0 || i.getStockMinimo() < 0) {
+				JOptionPane.showMessageDialog(this, "Las cantidades no pueden ser negativas.", "Aviso", JOptionPane.WARNING_MESSAGE);
+				return;
+			}
+
+			boolean ok = (i.getIdInsumoEmpaque() == 0) ? daoInsEmp.insertar(i) : daoInsEmp.actualizar(i);
+			if (ok) {
+				JOptionPane.showMessageDialog(this, "Insumo guardado con éxito.");
+				cargarTablaInsEmp();
+				if (i.getIdInsumoEmpaque() == 0) txtIdInsEmp.setText(String.valueOf(i.getIdInsumoEmpaque()));
+			} else {
+				JOptionPane.showMessageDialog(this, "No se pudo guardar el insumo.", "Error", JOptionPane.ERROR_MESSAGE);
+			}
+		} catch (Exception e) {
+			JOptionPane.showMessageDialog(this, "Error: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+		}
+	}
+
+	private void eliminarInsEmp() {
+		try {
+			int id = Integer.parseInt(txtIdInsEmp.getText().trim());
+			if (JOptionPane.showConfirmDialog(this, "¿Eliminar insumo #" + id + "?", "Confirmar", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+				if (daoInsEmp.eliminar(id)) {
+					JOptionPane.showMessageDialog(this, "Insumo eliminado.");
+					limpiarInsEmp();
+					cargarTablaInsEmp();
+				} else {
+					JOptionPane.showMessageDialog(this, "No se pudo eliminar el insumo.");
+				}
+			}
+		} catch (Exception e) {
+			JOptionPane.showMessageDialog(this, "ID inválido.");
+		}
+	}
+
+	private void limpiarInsEmp() {
+		txtIdInsEmp.setText("");
+		txtNomInsEmp.setText("");
+		txtCantInsEmp.setText("0");
+		cmbUnidadInsEmp.setSelectedIndex(0);
+		txtMinInsEmp.setText("0");
+		tablaInsEmp.clearSelection();
+	}
+
+	// ============================================================
 	// MÉTODOS AUXILIARES DE UI
+	// ============================================================
 	private JTextField crearCampo(int cols) {
 		JTextField tf = new JTextField(cols);
 		tf.setFont(F_CAMPO);
@@ -780,11 +1222,11 @@ public class VentanaPrincipal extends JFrame {
 		final int id;
 		final String nombre;
 		final String direccion;
-		
-		ClienteItem(int id, String nombre, String direccion) { 
-			this.id = id; this.nombre = nombre; this.direccion = direccion; 
+
+		ClienteItem(int id, String nombre, String direccion) {
+			this.id = id; this.nombre = nombre; this.direccion = direccion;
 		}
-		
+
 		@Override public String toString() { return nombre; }
 	}
 }
