@@ -23,6 +23,10 @@ CREATE TABLE Pedidos (
     FOREIGN KEY (id_cliente) REFERENCES Clientes(id_cliente)
 );
 
+-- 1. Agregar la columna 'estado' a la tabla Pedidos
+ALTER TABLE Pedidos ADD COLUMN estado VARCHAR(20) NOT NULL DEFAULT 'Pendiente';
+-- 2. (Opcional) Actualizar los pedidos existentes para que tengan un estado inicial claro
+UPDATE Pedidos SET estado = 'Pendiente' WHERE estado IS NULL OR estado = '';
 -- 3. TABLA INSUMOS DE PRODUCCIÓN
 CREATE TABLE Insumos_Produccion (
     id_insumo INT AUTO_INCREMENT PRIMARY KEY,
@@ -153,3 +157,126 @@ SELECT
 FROM Pedidos p
 INNER JOIN Clientes c ON p.id_cliente = c.id_cliente
 GROUP BY c.id_cliente, c.nombre_cafeteria;
+
+-- creacion de usuarios
+CREATE USER 'Gerente_general'@'localhost'
+IDENTIFIED BY 'rv_gerente';
+
+CREATE USER 'Encargado_ventas'@'localhost'
+IDENTIFIED BY 'rv_encargadov';
+
+CREATE USER 'Encargado_produccion'@'localhost'
+IDENTIFIED BY 'rv_encargadop';
+
+-- permisos
+GRANT ALL PRIVILEGES 
+ON roscosvarela.*
+TO 'Gerente_general'@'localhost'; 
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON roscosvarela.clientes
+TO 'Encargado_ventas'@'localhost'; 
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON roscosvarela.pedidos
+TO 'Encargado_ventas'@'localhost';
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON roscosvarela.insumos_produccion
+TO 'Encargado_produccion'@'localhost';
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON roscosvarela.insumos_empaquetado
+TO 'Encargado_produccion'@'localhost';
+
+-- ============================================================
+-- RoscosVarela - Actualización para Producción e Inventario
+-- ============================================================
+USE RoscosVarela;
+
+-- ------------------------------------------------------------
+-- 1. STOCK DE ROSCOS TERMINADOS
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS StockRoscos (
+    id_stock INT AUTO_INCREMENT PRIMARY KEY,
+    sabor VARCHAR(20) NOT NULL UNIQUE,
+    paquetes_disponibles INT NOT NULL DEFAULT 0
+);
+
+INSERT INTO StockRoscos (sabor, paquetes_disponibles) VALUES
+('Vainilla', 0),
+('Cocoa', 0),
+('Café', 0);
+
+-- ------------------------------------------------------------
+-- 2. LOTES DE PRODUCCIÓN
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS LotesProduccion (
+    id_lote INT AUTO_INCREMENT PRIMARY KEY,
+    fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_terminado DATETIME NULL,
+    estado VARCHAR(20) NOT NULL DEFAULT 'Planeado',  -- Planeado, EnProceso, Terminado, Cancelado
+    kg_harina DECIMAL(10,2) NOT NULL,
+    paquetes_vainilla INT NOT NULL DEFAULT 0,
+    paquetes_cocoa INT NOT NULL DEFAULT 0,
+    paquetes_cafe INT NOT NULL DEFAULT 0
+);
+
+-- ------------------------------------------------------------
+-- 3. DETALLE DE INSUMOS CONSUMIDOS POR LOTE
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS LoteInsumo (
+    id_lote_insumo INT AUTO_INCREMENT PRIMARY KEY,
+    id_lote INT NOT NULL,
+    id_insumo INT NOT NULL,
+    cantidad_consumida DECIMAL(10,2) NOT NULL,
+    FOREIGN KEY (id_lote) REFERENCES LotesProduccion(id_lote),
+    FOREIGN KEY (id_insumo) REFERENCES Insumos_Produccion(id_insumo)
+);
+
+-- ------------------------------------------------------------
+-- 4. STOCK MÍNIMO EN INSUMOS (para alertas en la UI)
+-- ------------------------------------------------------------
+ALTER TABLE Insumos_Produccion
+    ADD COLUMN stock_minimo DECIMAL(10,2) NOT NULL DEFAULT 0;
+
+ALTER TABLE Insumos_Empaquetado
+    ADD COLUMN stock_minimo INT NOT NULL DEFAULT 0;
+
+-- ------------------------------------------------------------
+-- 5. REESCRITURA DE RECETAS A "POR 1 KG DE HARINA"
+--    (original era por 2 kg de harina -> se divide entre 2)
+-- ------------------------------------------------------------
+DROP TABLE `roscosvarela`.`recetas`;
+
+INSERT INTO Recetas (sabor, id_insumo, cantidad, unidad, rendimiento) VALUES
+-- ================= VAINILLA (por 1 kg de harina) =================
+('Vainilla', 1, 0.50,   'kg',      1),   -- manteca vegetal
+('Vainilla', 2, 4.00,   'unidad',  1),   -- huevos
+('Vainilla', 3, 45.00,  'ml',      1),   -- vainilla
+('Vainilla', 4, 0.50,   'kg',      1),   -- azúcar glass
+('Vainilla', 5, 1.00,   'kg',      1),   -- harina
+
+-- ================= COCOA (por 1 kg de harina) ====================
+('Cocoa',    1, 0.50,   'kg',      1),
+('Cocoa',    2, 4.00,   'unidad',  1),
+('Cocoa',    3, 45.00,  'ml',      1),
+('Cocoa',    4, 0.50,   'kg',      1),
+('Cocoa',    5, 1.00,   'kg',      1),
+('Cocoa',    6, 200.00, 'gramos',  1),   -- cocoa
+
+-- ================= CAFÉ (por 1 kg de harina) =====================
+('Café',     1, 0.50,   'kg',      1),
+('Café',     2, 4.00,   'unidad',  1),
+('Café',     3, 45.00,  'ml',      1),
+('Café',     4, 0.50,   'kg',      1),
+('Café',     5, 1.00,   'kg',      1),
+('Café',     7, 40.00,  'gramos',  1);   -- café
+
+-- ------------------------------------------------------------
+-- 6. CONSULTAS DE VERIFICACIÓN
+-- ------------------------------------------------------------
+SELECT * FROM StockRoscos;
+SELECT * FROM Insumos_Produccion;
+SELECT * FROM Insumos_Empaquetado;
+SELECT * FROM Recetas ORDER BY sabor, id_insumo;
