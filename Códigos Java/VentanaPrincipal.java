@@ -10,6 +10,7 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.GridLayout;
 import java.awt.Insets;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -58,6 +59,8 @@ public class VentanaPrincipal extends JFrame {
 	private static final Font F_CAMPO  = new Font("SansSerif", Font.PLAIN, 14);
 	private static final Font F_BOTON  = new Font("SansSerif", Font.BOLD,  13);
 	private static final Font F_TABLA  = new Font("SansSerif", Font.PLAIN, 13);
+	private static final Font F_KPI    = new Font("SansSerif", Font.BOLD,  22);
+	private static final Font F_KPI_LBL= new Font("SansSerif", Font.BOLD,  11);
 
 	private JPanel contentPane;
 	private JTabbedPane tabbedPane;
@@ -98,6 +101,25 @@ public class VentanaPrincipal extends JFrame {
 	private final ClienteDAO daoCliente = new ClienteDAO();
 	private final InsumoProduccionDAO daoInsProd = new InsumoProduccionDAO();
 	private final InsumoEmpaquetadoDAO daoInsEmp = new InsumoEmpaquetadoDAO();
+	private final PlaneacionDAO daoPlaneacion = new PlaneacionDAO();
+	private final VentaDAO daoVenta = new VentaDAO();
+
+	// Componentes Pestaña PLANEACIÓN
+	private JTable tablaPlaneacion;
+	private DefaultTableModel modeloPlaneacion;
+
+	// Componentes Pestaña VENTAS
+	private JComboBox<ClienteItem> cmbFiltroVentas;
+	private JTabbedPane subTabsVentas;
+	private JLabel lblKpiIngresos, lblKpiPaquetes, lblKpiCafeterias, lblKpiTicket;
+	private int subTabVentasActiva = 0;   // 0=Mes actual, 1=Mes pasado, 2=Personalizado
+
+	// Referencias a las tablas de cada sub-pestaña de Ventas
+	private JTable tablaDesgloseMesActual, tablaCafeteriasMesActual;
+	private JTable tablaDesgloseMesPasado, tablaCafeteriasMesPasado;
+	private JTable tablaDesglosePersonalizado, tablaCafeteriasPersonalizado;
+
+	private JTextField txtDesdeVenta, txtHastaVenta;
 
 	private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
@@ -134,6 +156,8 @@ public class VentanaPrincipal extends JFrame {
 		tabbedPane.addTab("Gestión de Clientes", crearPanelClientes());
 		tabbedPane.addTab("Gestión de Producción", crearPanelProduccion());
 		tabbedPane.addTab("Gestión de Insumos", crearPanelInsumos());
+		tabbedPane.addTab("Planeación", crearPanelPlaneacion());
+		tabbedPane.addTab("Ventas", crearPanelVentas());
 
 		contentPane.add(tabbedPane, BorderLayout.CENTER);
 
@@ -143,7 +167,11 @@ public class VentanaPrincipal extends JFrame {
 		cargarTablaProduccion();
 		cargarTablaInsProd();
 		cargarTablaInsEmp();
+		cargarFiltroVentas();
 		configurarEventos();
+		
+		// Refrescar ventas al iniciar (por si acaso)
+		refrescarVentasSegunSubTab();
 	}
 
 	private JPanel crearEncabezado() {
@@ -920,6 +948,7 @@ public class VentanaPrincipal extends JFrame {
 				JOptionPane.showMessageDialog(this, "Cliente guardado con éxito.");
 				cargarTablaClientes();
 				cargarClientesCombo();
+				cargarFiltroVentas();
 				if (c.getIdCliente() == 0) txtIdCliente.setText(String.valueOf(c.getIdCliente()));
 			}
 		} catch (Exception e) {
@@ -936,6 +965,7 @@ public class VentanaPrincipal extends JFrame {
 					limpiarCliente();
 					cargarTablaClientes();
 					cargarClientesCombo();
+					cargarFiltroVentas();
 				} else {
 					JOptionPane.showMessageDialog(this, "No se pudo eliminar (puede tener pedidos asociados).");
 				}
@@ -983,6 +1013,9 @@ public class VentanaPrincipal extends JFrame {
 			JOptionPane.showMessageDialog(this, "Pedido #" + idPedido + " marcado como ENTREGADO.");
 			cargarTablaProduccion();
 			cargarTablaPedidos();
+			if (tabbedPane.getSelectedIndex() == 5) {
+				refrescarVentasSegunSubTab();
+			}
 		} else {
 			JOptionPane.showMessageDialog(this, "Error al actualizar el estado.", "Error", JOptionPane.ERROR_MESSAGE);
 		}
@@ -1216,6 +1249,407 @@ public class VentanaPrincipal extends JFrame {
 		tabla.getTableHeader().setFont(F_ETIQ);
 		tabla.setSelectionBackground(COLOR_DORADO);
 		tabla.setSelectionForeground(Color.WHITE);
+	}
+
+	// ============================================================
+	// PESTAÑA 5: PLANEACIÓN
+	// ============================================================
+	private JPanel crearPanelPlaneacion() {
+		JPanel panel = new JPanel(new BorderLayout(10, 10));
+		panel.setBackground(COLOR_FONDO);
+		panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+
+		JPanel superior = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 10));
+		superior.setBackground(COLOR_FONDO);
+
+		JLabel lblInfo = new JLabel("Calcula kg de harina e insumos a comprar según pedidos pendientes:");
+		lblInfo.setFont(F_ETIQ);
+		lblInfo.setForeground(COLOR_MARRON);
+
+		JButton btnCalcular = boton("Calcular planeación", COLOR_VERDE, Color.WHITE,
+				e -> calcularPlaneacion());
+
+		superior.add(lblInfo);
+		superior.add(btnCalcular);
+
+		panel.add(superior, BorderLayout.NORTH);
+		panel.add(crearTablaPlaneacionUI(), BorderLayout.CENTER);
+		return panel;
+	}
+
+	private JScrollPane crearTablaPlaneacionUI() {
+		String[] cols = {"ID Pedido", "Sabor", "Paq. Pedidos", "Kg Harina",
+						 "Insumo", "Necesario", "En Stock", "A Comprar", "Unidad"};
+
+		modeloPlaneacion = new DefaultTableModel(cols, 0) {
+			private static final long serialVersionUID = 1L;
+			@Override public boolean isCellEditable(int r, int c) { return false; }
+		};
+
+		tablaPlaneacion = new JTable(modeloPlaneacion);
+		configurarEstiloTabla(tablaPlaneacion);
+
+		tablaPlaneacion.getColumnModel().getColumn(0).setPreferredWidth(70);
+		tablaPlaneacion.getColumnModel().getColumn(1).setPreferredWidth(80);
+		tablaPlaneacion.getColumnModel().getColumn(2).setPreferredWidth(90);
+		tablaPlaneacion.getColumnModel().getColumn(3).setPreferredWidth(90);
+		tablaPlaneacion.getColumnModel().getColumn(4).setPreferredWidth(160);
+		tablaPlaneacion.getColumnModel().getColumn(5).setPreferredWidth(80);
+		tablaPlaneacion.getColumnModel().getColumn(6).setPreferredWidth(80);
+		tablaPlaneacion.getColumnModel().getColumn(7).setPreferredWidth(90);
+		tablaPlaneacion.getColumnModel().getColumn(8).setPreferredWidth(70);
+
+		JScrollPane scroll = new JScrollPane(tablaPlaneacion);
+		scroll.setBorder(new LineBorder(COLOR_DORADO, 1, true));
+		scroll.setPreferredSize(new Dimension(1040, 400));
+		return scroll;
+	}
+
+	private void calcularPlaneacion() {
+		modeloPlaneacion.setRowCount(0);
+		List<Object[]> pedidos = daoPlaneacion.pedidosPendientes();
+		String[] sabores = {"Vainilla", "Cocoa", "Café"};
+		int[] cantidadesPedido = new int[3];
+
+		for (Object[] p : pedidos) {
+			int idPedido = (Integer) p[0];
+			cantidadesPedido[0] = (Integer) p[1];
+			cantidadesPedido[1] = (Integer) p[2];
+			cantidadesPedido[2] = (Integer) p[3];
+
+			for (int i = 0; i < 3; i++) {
+				int paquetes = cantidadesPedido[i];
+				if (paquetes <= 0) continue;
+				String sabor = sabores[i];
+
+				double harinaBase = (double) paquetes / PlanProduccion.PAQUETES_POR_KG_HARINA;
+				double mantecaTeorica = harinaBase * 0.50;
+				double mantecaReal = Math.ceil(mantecaTeorica / 0.250) * 0.250;
+				double harinaReal = mantecaReal * 2.0;
+
+				List<Object[]> receta = daoPlaneacion.recetaPorSabor(sabor);
+				boolean primeraFilaDelSabor = true;
+
+				for (Object[] fila : receta) {
+					int idInsumo        = (Integer) fila[0];
+					String nombreInsumo = (String)  fila[1];
+					double cantReceta   = (Double)  fila[2];
+					String unidad       = (String)  fila[3];
+
+					double necesario = harinaReal * cantReceta;
+					double enStock   = daoPlaneacion.stockInsumo(idInsumo);
+					double aComprar  = Math.max(0, necesario - enStock);
+
+					Object colId       = primeraFilaDelSabor ? idPedido : "";
+					Object colSabor    = primeraFilaDelSabor ? sabor : "";
+					Object colPaquetes = primeraFilaDelSabor ? paquetes : "";
+					Object colHarina   = primeraFilaDelSabor ? String.format("%.2f", harinaReal) : "";
+
+					modeloPlaneacion.addRow(new Object[] {
+						colId,
+						colSabor,
+						colPaquetes,
+						colHarina,
+						nombreInsumo,
+						String.format("%.2f", necesario),
+						String.format("%.2f", enStock),
+						String.format("%.2f", aComprar),
+						unidad
+					});
+
+					primeraFilaDelSabor = false;
+				}
+			}
+		}
+
+		if (modeloPlaneacion.getRowCount() == 0) {
+			JOptionPane.showMessageDialog(this, "No hay pedidos pendientes por planear.", "Sin datos", JOptionPane.INFORMATION_MESSAGE);
+		}
+	}
+
+	// ============================================================
+	// PESTAÑA 6: VENTAS (CORREGIDA)
+	// ============================================================
+	private JPanel crearPanelVentas() {
+		JPanel panel = new JPanel(new BorderLayout(10, 10));
+		panel.setBackground(COLOR_FONDO);
+		panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+
+		// ---- Norte: filtro + KPIs ----
+		JPanel norte = new JPanel(new BorderLayout(0, 10));
+		norte.setBackground(COLOR_FONDO);
+
+		JPanel panelFiltro = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 4));
+		panelFiltro.setBackground(COLOR_FONDO);
+		panelFiltro.add(etiqueta("Cafetería:"));
+		cmbFiltroVentas = new JComboBox<>();
+		cmbFiltroVentas.setFont(F_CAMPO);
+		cmbFiltroVentas.setBackground(COLOR_BLANCO);
+		cmbFiltroVentas.setPreferredSize(new Dimension(260, 30));
+		panelFiltro.add(cmbFiltroVentas);
+		norte.add(panelFiltro, BorderLayout.NORTH);
+
+		JPanel panelKpis = new JPanel(new GridLayout(1, 4, 12, 0));
+		panelKpis.setBackground(COLOR_FONDO);
+		lblKpiIngresos   = crearEtiquetaKpi("$0.00", "Ingresos");
+		lblKpiPaquetes   = crearEtiquetaKpi("0", "Paquetes vendidos");
+		lblKpiCafeterias = crearEtiquetaKpi("0", "Cafeterías activas");
+		lblKpiTicket     = crearEtiquetaKpi("$0.00", "Ticket promedio");
+		panelKpis.add(crearTarjetaKpi(lblKpiIngresos,   "Ingresos"));
+		panelKpis.add(crearTarjetaKpi(lblKpiPaquetes,   "Paquetes vendidos"));
+		panelKpis.add(crearTarjetaKpi(lblKpiCafeterias, "Cafeterías activas"));
+		panelKpis.add(crearTarjetaKpi(lblKpiTicket,     "Ticket promedio"));
+		norte.add(panelKpis, BorderLayout.CENTER);
+
+		panel.add(norte, BorderLayout.NORTH);
+
+		// ---- Centro: sub-pestañas ----
+		subTabsVentas = new JTabbedPane();
+		subTabsVentas.setFont(F_ETIQ);
+		subTabsVentas.setBackground(COLOR_CREMA);
+		subTabsVentas.setForeground(COLOR_MARRON);
+
+		// Crear cada pestaña con sus propias tablas
+		subTabsVentas.addTab("Mes actual", crearSubPanelVentas(false));
+		subTabsVentas.addTab("Mes pasado", crearSubPanelVentas(false));
+		subTabsVentas.addTab("Periodo personalizado", crearSubPanelVentas(true));
+
+		subTabsVentas.addChangeListener(e -> {
+			subTabVentasActiva = subTabsVentas.getSelectedIndex();
+			refrescarVentasSegunSubTab();
+		});
+
+		panel.add(subTabsVentas, BorderLayout.CENTER);
+		cmbFiltroVentas.addActionListener(e -> refrescarVentasSegunSubTab());
+
+		return panel;
+	}
+
+	private JPanel crearSubPanelVentas(boolean conRango) {
+		JPanel panel = new JPanel(new BorderLayout(10, 10));
+		panel.setBackground(COLOR_FONDO);
+		panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+
+		if (conRango) {
+			JPanel panelRango = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
+			panelRango.setBackground(COLOR_FONDO);
+			panelRango.add(etiqueta("Desde:"));
+			txtDesdeVenta = crearCampo(12);
+			txtDesdeVenta.setText(LocalDate.now().withDayOfMonth(1).format(FMT));
+			panelRango.add(txtDesdeVenta);
+
+			panelRango.add(etiqueta("Hasta:"));
+			txtHastaVenta = crearCampo(12);
+			txtHastaVenta.setText(LocalDate.now().format(FMT));
+			panelRango.add(txtHastaVenta);
+
+			JButton btnCalcular = boton("Calcular", COLOR_VERDE, Color.WHITE, e -> calcularVentasPersonalizado());
+			panelRango.add(btnCalcular);
+
+			panel.add(panelRango, BorderLayout.NORTH);
+		}
+
+		// Tablas propias de esta pestaña
+		JTable tablaDesglose = crearTablaDesgloseSaborLocal();
+		JTable tablaCafeterias = crearTablaCafeteriasVentaLocal();
+
+		// Guardar referencias según la pestaña que sea
+		int idx = subTabsVentas == null ? 0 : subTabsVentas.getTabCount();
+		if (idx == 0) {
+			tablaDesgloseMesActual = tablaDesglose;
+			tablaCafeteriasMesActual = tablaCafeterias;
+		} else if (idx == 1) {
+			tablaDesgloseMesPasado = tablaDesglose;
+			tablaCafeteriasMesPasado = tablaCafeterias;
+		} else if (idx == 2) {
+			tablaDesglosePersonalizado = tablaDesglose;
+			tablaCafeteriasPersonalizado = tablaCafeterias;
+		}
+
+		JPanel contenido = new JPanel(new GridLayout(2, 1, 0, 10));
+		contenido.setBackground(COLOR_FONDO);
+		contenido.add(crearPanelConTabla("Desglose por sabor", tablaDesglose));
+		contenido.add(crearPanelConTabla("Cafeterías con ventas en el periodo", tablaCafeterias));
+
+		panel.add(contenido, BorderLayout.CENTER);
+		return panel;
+	}
+
+	private JTable crearTablaDesgloseSaborLocal() {
+		String[] cols = {"Sabor", "Paquetes", "Ingresos", "% del total"};
+		DefaultTableModel modelo = new DefaultTableModel(cols, 0) {
+			private static final long serialVersionUID = 1L;
+			@Override public boolean isCellEditable(int r, int c) { return false; }
+		};
+		JTable tabla = new JTable(modelo);
+		configurarEstiloTabla(tabla);
+		tabla.getColumnModel().getColumn(0).setPreferredWidth(120);
+		tabla.getColumnModel().getColumn(1).setPreferredWidth(100);
+		tabla.getColumnModel().getColumn(2).setPreferredWidth(120);
+		tabla.getColumnModel().getColumn(3).setPreferredWidth(100);
+		return tabla;
+	}
+
+	private JTable crearTablaCafeteriasVentaLocal() {
+		String[] cols = {"Cafetería", "Pedidos", "Paquetes", "Ingresos"};
+		DefaultTableModel modelo = new DefaultTableModel(cols, 0) {
+			private static final long serialVersionUID = 1L;
+			@Override public boolean isCellEditable(int r, int c) { return false; }
+		};
+		JTable tabla = new JTable(modelo);
+		configurarEstiloTabla(tabla);
+		tabla.getColumnModel().getColumn(0).setPreferredWidth(250);
+		tabla.getColumnModel().getColumn(1).setPreferredWidth(90);
+		tabla.getColumnModel().getColumn(2).setPreferredWidth(100);
+		tabla.getColumnModel().getColumn(3).setPreferredWidth(120);
+		return tabla;
+	}
+
+	private JPanel crearPanelConTabla(String titulo, JTable tabla) {
+		JPanel p = new JPanel(new BorderLayout(0, 4));
+		p.setBackground(COLOR_FONDO);
+		JLabel lbl = new JLabel(titulo);
+		lbl.setFont(F_ETIQ);
+		lbl.setForeground(COLOR_MARRON);
+		p.add(lbl, BorderLayout.NORTH);
+		JScrollPane scroll = new JScrollPane(tabla);
+		scroll.setBorder(new LineBorder(COLOR_DORADO, 1, true));
+		p.add(scroll, BorderLayout.CENTER);
+		return p;
+	}
+
+	// Etiqueta grande con el valor del KPI.
+	private JLabel crearEtiquetaKpi(String valorInicial, String _titulo) {
+		JLabel l = new JLabel(valorInicial);
+		l.setFont(F_KPI);
+		l.setForeground(COLOR_MARRON);
+		l.setHorizontalAlignment(JLabel.CENTER);
+		return l;
+	}
+
+	// Tarjeta con fondo crema, borde dorado, valor grande y etiqueta pequeña.
+	private JPanel crearTarjetaKpi(JLabel valor, String titulo) {
+		JPanel card = new JPanel(new BorderLayout(0, 4));
+		card.setBackground(COLOR_CREMA);
+		card.setBorder(BorderFactory.createCompoundBorder(
+			new LineBorder(COLOR_DORADO, 1, true),
+			new EmptyBorder(10, 10, 10, 10)
+		));
+		card.add(valor, BorderLayout.CENTER);
+
+		JLabel lblTitulo = new JLabel(titulo, JLabel.CENTER);
+		lblTitulo.setFont(F_KPI_LBL);
+		lblTitulo.setForeground(COLOR_DORADO);
+		card.add(lblTitulo, BorderLayout.SOUTH);
+
+		return card;
+	}
+
+	// Carga el combo del filtro de ventas (incluye la opción "Todas").
+	private void cargarFiltroVentas() {
+		if (cmbFiltroVentas == null) return;
+		DefaultComboBoxModel<ClienteItem> modelo = new DefaultComboBoxModel<>();
+		modelo.addElement(new ClienteItem(0, "Todas las cafeterías", ""));
+		for (Cliente c : daoCliente.listar()) {
+			modelo.addElement(new ClienteItem(c.getIdCliente(), c.getNombreCafeteria(), c.getDireccion()));
+		}
+		cmbFiltroVentas.setModel(modelo);
+	}
+
+	// Refresca el panel de ventas usando el rango de la sub-pestaña activa.
+	private void refrescarVentasSegunSubTab() {
+		switch (subTabVentasActiva) {
+			case 0: calcularVentasMesActual();   break;
+			case 1: calcularVentasMesPasado();   break;
+			case 2: break; // Personalizado: no recalcular hasta que el usuario presione Calcular
+		}
+	}
+
+	private void calcularVentasMesActual() {
+		LocalDate hoy = LocalDate.now();
+		calcularVentas(hoy.withDayOfMonth(1), hoy, tablaDesgloseMesActual, tablaCafeteriasMesActual);
+	}
+
+	private void calcularVentasMesPasado() {
+		LocalDate hoy = LocalDate.now();
+		calcularVentas(
+			hoy.minusMonths(1).withDayOfMonth(1),
+			hoy.withDayOfMonth(1).minusDays(1),
+			tablaDesgloseMesPasado, tablaCafeteriasMesPasado
+		);
+	}
+
+	private void calcularVentasPersonalizado() {
+		try {
+			LocalDate desde = LocalDate.parse(txtDesdeVenta.getText().trim(), FMT);
+			LocalDate hasta = LocalDate.parse(txtHastaVenta.getText().trim(), FMT);
+			if (desde.isAfter(hasta)) {
+				JOptionPane.showMessageDialog(this,
+					"La fecha 'Desde' no puede ser posterior a 'Hasta'.",
+					"Aviso", JOptionPane.WARNING_MESSAGE);
+				return;
+			}
+			calcularVentas(desde, hasta, tablaDesglosePersonalizado, tablaCafeteriasPersonalizado);
+		} catch (Exception e) {
+			JOptionPane.showMessageDialog(this,
+				"Escribe fechas válidas (yyyy-MM-dd).",
+				"Aviso", JOptionPane.WARNING_MESSAGE);
+		}
+	}
+
+	// Núcleo: ejecuta el DAO con el filtro actual y refresca KPIs + tablas específicas
+	private void calcularVentas(LocalDate desde, LocalDate hasta, JTable tablaDesglose, JTable tablaCafeterias) {
+		Integer idCliente = null;
+		ClienteItem sel = (ClienteItem) cmbFiltroVentas.getSelectedItem();
+		if (sel != null && sel.id > 0) idCliente = sel.id;
+
+		ResumenVenta r = daoVenta.obtenerResumen(desde, hasta, idCliente);
+		refrescarKpisVenta(r);
+		
+		if (tablaDesglose != null) refrescarTablaDesgloseSabor(tablaDesglose, r);
+		if (tablaCafeterias != null) refrescarTablaCafeteriasVenta(tablaCafeterias, r);
+	}
+
+	private void refrescarKpisVenta(ResumenVenta r) {
+		lblKpiIngresos.setText(String.format("$%.2f", r.getTotalIngresos()));
+		lblKpiPaquetes.setText(String.valueOf(r.getTotalPaquetes()));
+		lblKpiCafeterias.setText(String.valueOf(r.getCafeteriasActivas()));
+		lblKpiTicket.setText(String.format("$%.2f", r.getTicketPromedio()));
+	}
+
+	private void refrescarTablaDesgloseSabor(JTable tabla, ResumenVenta r) {
+		DefaultTableModel modelo = (DefaultTableModel) tabla.getModel();
+		modelo.setRowCount(0);
+		if (!r.hayVentas()) {
+			modelo.addRow(new Object[]{"Sin ventas en el periodo", "-", "-", "-"});
+			return;
+		}
+		for (ResumenVenta.FilaSabor f : r.getDesgloseSabores()) {
+			modelo.addRow(new Object[]{
+				f.getSabor(), f.getPaquetes(),
+				String.format("$%.2f", f.getIngresos()),
+				String.format("%.1f%%", f.getPorcentaje())
+			});
+		}
+		modelo.addRow(new Object[]{
+			"TOTAL", r.getTotalPaquetes(),
+			String.format("$%.2f", r.getTotalIngresos()), "100%"
+		});
+	}
+
+	private void refrescarTablaCafeteriasVenta(JTable tabla, ResumenVenta r) {
+		DefaultTableModel modelo = (DefaultTableModel) tabla.getModel();
+		modelo.setRowCount(0);
+		if (!r.hayVentas()) {
+			modelo.addRow(new Object[]{"Sin ventas en el periodo", "-", "-", "-"});
+			return;
+		}
+		for (ResumenVenta.FilaCafeteria f : r.getCafeterias()) {
+			modelo.addRow(new Object[]{
+				f.getNombre(), f.getNumPedidos(), f.getPaquetes(),
+				String.format("$%.2f", f.getIngresos())
+			});
+		}
 	}
 
 	private static class ClienteItem {
